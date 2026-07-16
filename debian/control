@@ -1,0 +1,32 @@
+Source: jnkpu
+Section: net
+Priority: optional
+Maintainer: Alice Haap <sebastianhaap@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               maven,
+               default-jdk-headless (>= 2:1.11)
+Standards-Version: 4.6.2
+Homepage: https://github.com/Al1c3-1337/JNKPU
+Rules-Requires-Root: no
+
+Package: jnkpu
+Architecture: all
+Depends: ${misc:Depends},
+         default-jre-headless (>= 2:1.11) | java11-runtime-headless
+Recommends: openssl, pcscd, ykcs11, yubikey-manager
+Suggests: opensc-pkcs11, softhsm2
+Description: BitLocker Network Unlock (MS-NKPU) server with PKCS#11 key backend
+ JNKPU answers BitLocker Network Unlock (MS-NKPU) requests on DHCP port
+ 67, letting Windows clients boot unattended while on the trusted
+ network - without a domain, without WDS, without Windows Server.
+ .
+ The RSA private key can live in a plain PKCS#8 DER file or behind any
+ PKCS#11 module (YubiKey PIV, SoftHSM, OpenSC, TPM2); with a token the
+ key never leaves the device. The package ships a systemd unit that can
+ prompt for the token PIN at boot via systemd-ask-password, and
+ jnkpu-provision-token, which moves a key from a Windows-generated PFX
+ onto a YubiKey and writes an offline backup.
+ .
+ The Recommends cover the token path: pcscd and ykcs11 to talk to a
+ YubiKey, yubikey-manager and openssl for provisioning. A server that
+ only uses the file backend needs none of them.

@@ -1,0 +1,25 @@
+#!/usr/bin/make -f
+# Maven fetches its dependencies from the network on the first build. This is
+# packaging for self-built installs, not an archive candidate - see
+# debian/README.source.
+
+# --buildsystem=makefile: there is no Makefile, so every dh_auto_* step is a
+# no-op instead of debhelper guessing "maven" and demanding maven-debian-helper.
+%:
+	dh $@ --buildsystem=makefile
+
+ifneq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+    MVN_TESTS = -DskipTests
+endif
+
+override_dh_auto_build:
+	mvn -B package $(MVN_TESTS)
+
+override_dh_auto_clean:
+	-mvn -B clean
+
+# Do not enable or start the unit on install: a fresh install has no key and
+# no configured backend, and a service that may prompt for a PIN should be
+# brought up deliberately (systemctl enable --now jnkpu).
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start

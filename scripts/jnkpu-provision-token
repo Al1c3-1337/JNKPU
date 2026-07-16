@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# ============================================================================
+#  PFX (von certreq auf Windows) -> PKCS8 DER -> YubiKey Slot 9d
+# ============================================================================
+set -euo pipefail
+PFX="${1:?Usage: $0 <BitLocker-NetworkUnlock.pfx> [backup-dir]}"
+BACKUP="${2:-./backup}"
+
+command -v ykman >/dev/null || { echo "ykman fehlt: pip install yubikey-manager"; exit 1; }
+
+echo "=== ROCA-Check (CVE-2017-15361) ==="
+ykman info || true
+cat <<'ROCA'
+
+  Firmware 4.2.6 - 4.3.4  => ON-CHIP-Generierung ist kaputt (ROCA).
+  Importierte Keys sind NICHT betroffen. Dieses Skript importiert nur.
+  Generiere niemals auf so einer Firmware. Weiter mit Enter, Abbruch mit Ctrl-C.
+ROCA
+read -r
+
+mkdir -p "$BACKUP"; chmod 700 "$BACKUP"
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+
+echo "=== Key + Cert aus PFX holen ==="
+openssl pkcs12 -in "$PFX" -nocerts -nodes -out "$TMP/key.pem"
+openssl pkcs12 -in "$PFX" -clcerts -nokeys -out "$TMP/cert.pem"
+
+# JNKPU liest die Datei roh in PKCS8EncodedKeySpec -> es MUSS DER sein, nicht PEM.
+openssl pkcs8 -topk8 -nocrypt -in "$TMP/key.pem" -outform DER -out "$BACKUP/networkunlock.key"
+cp "$TMP/key.pem" "$BACKUP/networkunlock-backup.pem"
+cp "$TMP/cert.pem" "$BACKUP/networkunlock.crt"
+chmod 600 "$BACKUP"/*
+
+echo
+echo "=== Zertifikat pruefen (Client verlaesst sich darauf) ==="
+openssl x509 -in "$TMP/cert.pem" -noout -text | grep -A2 "Key Usage\|Extended Key Usage" || true
+echo "  Erwartet: Key Encipherment  +  EKU 1.3.6.1.4.1.311.67.1.1"
+echo
+echo "  Thumbprint (SHA1):"
+openssl x509 -in "$TMP/cert.pem" -noout -fingerprint -sha1 | tr -d ':' 
+echo
+
+cat <<'WARN'
+=== Vor dem Import: PUK setzen! ===
+  PIN und PUK haben je 3 Versuche. Beide erschoepft => PIV-Reset => Slot leer.
+  Mit Backup ist das erholbar (reimportieren, Thumbprint bleibt gleich, Client
+  merkt nichts) - aber nur, wenn das Backup wirklich existiert.
+
+    ykman piv access change-puk
+    ykman piv access change-pin
+  PUK offline notieren. Nicht in den Passwortmanager auf dem Rechner,
+  den dieses Ding aufsperrt.
+
+Weiter mit Enter.
+WARN
+read -r
+
+echo "=== Import in Slot 9d (Key Management) ==="
+# pin-policy ist NACH dem Import UNVERAENDERLICH. ONCE = einmal pro Card-Session.
+ykman piv keys import --pin-policy=ONCE --touch-policy=NEVER 9d "$TMP/key.pem"
+ykman piv certificates import 9d "$TMP/cert.pem"
+#  ^ Ohne Zertifikat im Slot ist der Key fuer den Java-KeyStore UNSICHTBAR.
+
+echo
+ykman piv info
+echo
+echo "Backup liegt in $BACKUP :"
+echo "  networkunlock.key         PKCS8 DER  -> Stufe 1 (Datei-Backend)"
+echo "  networkunlock-backup.pem  PEM        -> Reimport nach PIV-Reset"
+echo "  networkunlock.crt         Zertifikat"
+echo
+echo "Das Backup gehoert dahin, wo dein BitLocker-Recovery-Key liegt. Offline."

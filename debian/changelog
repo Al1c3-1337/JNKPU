@@ -1,0 +1,5 @@
+jnkpu (1.2.0) unstable; urgency=medium
+
+  * Initial Debian packaging.
+
+ -- Alice Haap <alicehaap@gmail.com>  Thu, 16 Jul 2026 03:09:12 +0200

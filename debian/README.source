@@ -1,0 +1,11 @@
+This is a native package built from the upstream repository itself, intended
+for self-built installs on Debian and Ubuntu - not an archive candidate.
+
+The build runs Maven, which downloads the (few) compile and test dependencies
+from Maven Central on the first build. There is no offline build path.
+
+    sudo apt install debhelper maven default-jdk-headless
+    dpkg-buildpackage -us -uc -b          # or: scripts/build-deb.sh
+
+The unit tests (the MS-NKPU protocol harness) run during the build; skip them
+with DEB_BUILD_OPTIONS=nocheck.

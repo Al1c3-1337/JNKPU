@@ -1,0 +1,9 @@
+#!/bin/sh
+# Launcher for the JNKPU fat jar. Installed as /usr/bin/jnkpu by the Debian
+# package. Port 67 is privileged - run it with sudo.
+#
+#   sudo jnkpu --noipv6 /etc/jnkpu/networkunlock.key
+#   sudo jnkpu --noipv6 --pkcs11-lib /usr/lib/x86_64-linux-gnu/libykcs11.so
+#
+# JNKPU_JAR overrides the jar location (e.g. a freshly built target/jnkpu.jar).
+exec java -Xmx64m -jar "${JNKPU_JAR:-/usr/share/jnkpu/jnkpu.jar}" "$@"

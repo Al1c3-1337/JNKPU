@@ -1,0 +1,63 @@
+[Unit]
+Description=JNKPU - BitLocker Network Unlock server (MS-NKPU)
+Documentation=https://github.com/iprice/JNKPU
+After=network-online.target pcscd.service
+Wants=network-online.target
+Requires=pcscd.service
+
+[Service]
+Type=simple
+
+# Der Start blockiert, bis jemand die PIN eintippt. Von einer SSH-Sitzung aus:
+#     systemd-tty-ask-password-agent --query
+#
+# Die PIN geht ueber eine Pipe direkt in den Java-Prozess: kein Dateisystem,
+# kein tmpfs, und nichts davon in /proc/<pid>/cmdline.
+#
+# --timeout=0: systemd-ask-password gives up after 90s by default, and nobody logs
+# in that fast after a boot. The empty answer would then be refused by the server -
+# which is the only reason an expired timer does not cost one of three PIN attempts.
+ExecStart=/bin/sh -c 'systemd-ask-password --timeout=0 --id=jnkpu "YubiKey PIN:" | exec /usr/bin/java -Xmx64m \
+    -jar /opt/jnkpu/jnkpu.jar \
+    --noipv6 \
+    --pkcs11-lib /usr/lib/aarch64-linux-gnu/libykcs11.so \
+    --pkcs11-pin-stdin'
+
+# ===========================================================================
+#  Restart=no - der Grund hat sich geaendert, das Ergebnis nicht.
+# ===========================================================================
+#  Frueher: ein Restart vor dem LUKS-Mount haette die drei PIN-Versuche in
+#  Sekunden verbrannt. Ohne LUKS und mit stdin ist das weg - systemd-ask-password
+#  blockiert, statt zu raten, also kostet ein Restart keinen Versuch.
+#
+#  Neuer Grund: ein Dienst, der einen Menschen braucht, kann sich nicht selbst
+#  heilen. Restart waere Theater - er wuerde nur einen neuen Passwort-Prompt
+#  aufmachen, den nachts niemand beantwortet.
+#
+#  ACHTUNG, falls du --accept-cached --keyname=jnkpu-pin ergaenzt (PIN im
+#  Kernel-Keyring, damit ein Restart ohne dich auskommt): dann ist Restart wieder
+#  gefaehrlich. Eine falsch gecachte PIN wuerde bei jedem Restart erneut
+#  eingereicht - drei Runden und der Slot ist gesperrt. Nicht kombinieren.
+Restart=no
+
+# root, weil systemd-ask-password nach /run/systemd/ask-password/ schreiben muss
+# und Port 67 privilegiert ist. Die frueher hier stehende User=jnkpu-Haertung
+# ist bei einem Java-Daemon auf einem Single-Purpose-Pi Deko - sie gegen
+# "PIN nie auf Platte" einzutauschen waere ein schlechtes Geschaeft.
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=true
+SystemCallFilter=@system-service
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

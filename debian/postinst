@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+# Fresh install only: /etc/jnkpu will hold the file-backend key, so it gets
+# the same permissions the key needs. Upgrades leave it alone - the admin may
+# have changed it deliberately.
+if [ "$1" = "configure" ] && [ -z "$2" ]; then
+    chmod 0700 /etc/jnkpu
+fi
+
+#DEBHELPER#

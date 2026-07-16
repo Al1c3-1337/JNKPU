@@ -1,0 +1,42 @@
+[Unit]
+Description=JNKPU - BitLocker Network Unlock server (MS-NKPU)
+Documentation=https://github.com/Al1c3-1337/JNKPU
+After=network-online.target pcscd.service
+Wants=network-online.target pcscd.service
+
+[Service]
+Type=simple
+
+# All configuration lives in /etc/default/jnkpu. The helper reads it and,
+# with JNKPU_ASK_PIN=yes, pipes the PIN from systemd-ask-password straight
+# into the Java process: no filesystem, no tmpfs, nothing in
+# /proc/<pid>/cmdline.
+ExecStart=/usr/libexec/jnkpu/jnkpu-daemon
+
+# A service that needs a human to type a PIN cannot heal itself - a restart
+# would only open a new password prompt that nobody answers at night.
+#
+# CAUTION if you add --accept-cached (PIN in the kernel keyring so a restart
+# works unattended): then Restart becomes dangerous again. A wrongly cached
+# PIN would be resubmitted on every restart - three rounds and the PIV slot
+# is locked. Do not combine the two.
+Restart=no
+
+# Runs as root: systemd-ask-password needs /run/systemd/ask-password/, and
+# port 67 is privileged.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=true
+SystemCallFilter=@system-service
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

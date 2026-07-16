@@ -1,7 +1,24 @@
 /*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
+ * JNKPU - Java Network Key Protector Unlocker (MS-NKPU)
+ *
+ * Copyright (C) 2017 Iain Price
+ * Copyright (C) 2026 {AUTHOR}
+ *
+ * Modified 2026: pinned the RSA transform to PKCS#1 v1.5 (upstream used the bare
+ * "RSA" alias, whose padding depends on which provider wins) and added an entry
+ * point for externally supplied, non-extractable keys.
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation, either version 3 of the License, or (at your option) any later
+ * version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 package net.coagulate.JNKPU;
 
@@ -16,7 +33,6 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
-import javax.security.auth.DestroyFailedException;
 import java.io.*;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
@@ -38,7 +54,7 @@ public class Cryptography {
     public static void init(String filename) {
         try {
             loadPrivateKey(filename);
-            Cipher rsa=Cipher.getInstance("RSA");
+            Cipher rsa=Cipher.getInstance(TRANSFORM);
             rsa.init(Cipher.DECRYPT_MODE,key);
         } catch (NoSuchPaddingException|NoSuchAlgorithmException ex) {
             System.err.println("Failed to load RSA algorithm - "+ex); System.exit(1);
@@ -47,7 +63,32 @@ public class Cryptography {
         }
     }
 
+    /** MS-NKPU uses PKCS#1 v1.5. NEVER use the bare "RSA" alias: its meaning depends on
+     *  which provider wins, and BouncyCastle's default is NoPadding, which would silently
+     *  return garbage. No provider is pinned here on purpose - the JCE resolves the provider
+     *  at init() from the key, so this one string works for both a file key (SunJCE) and a
+     *  PKCS#11 token handle (SunPKCS11).
+     */
+    private static final String TRANSFORM="RSA/ECB/PKCS1Padding";
+
     private static PrivateKey key=null;
+
+    /** Set the private key from an external source (e.g. a PKCS#11 token).
+     * The key never needs to exist as bytes on disk.
+     * @param k A PrivateKey, possibly a non-extractable hardware-backed handle.
+     */
+    public static void setPrivateKey(PrivateKey k) {
+        key=k;
+        try {
+            Cipher rsa=Cipher.getInstance(TRANSFORM);
+            rsa.init(Cipher.DECRYPT_MODE,key);
+            NetworkUnlock.logger.info("RSA preflight OK, provider="+rsa.getProvider().getName()
+                +", transform="+TRANSFORM);
+        } catch (Exception e) {
+            System.err.println("FATAL: supplied key cannot perform "+TRANSFORM+" - "+e);
+            System.exit(1);
+        }
+    }
 
     /** Load the actual key
      * 
@@ -70,29 +111,17 @@ public class Cryptography {
             System.err.println("Unable to load private key file "+filename+", file not found?");
             System.exit(1);
         } catch (IOException ex) {
-            System.err.println("IOException loading private key:"+ex.toString());
+            System.err.println("IOException loading private key:"+ ex);
             System.exit(1);
         } catch (NoSuchAlgorithmException ex) {
-            System.err.println("Failed to load RSA encryption provider, check your Java installation (? - "+ex.toString()+")");
+            System.err.println("Failed to load RSA encryption provider, check your Java installation (? - "+ ex +")");
             System.exit(1);
         } catch (InvalidKeySpecException ex) {
-            System.err.println("Invalid private key - is it in PKCS8 format with no password? ("+ex.toString()+")");
+            System.err.println("Invalid private key - is it in PKCS8 format with no password? ("+ ex +")");
             System.exit(1);
         }
     }
-    
-    /** Unloads the private key.
-     * This method assumes the key's destroy() has any meaningful security.  The documentation says it does, which is nice.
-     */
-    public static void unloadPrivateKey() {
-        if (key==null) { return; }
-        try { key.destroy(); }
-        catch (DestroyFailedException e) {
-            NetworkUnlock.logger.info("Key destruction failed, this seems largely expected, unfortunately.");
-        }
-        key=null;
-    }
-    
+
     /** Decrypt client provided RSA payload
      * The client sends us the CK+SK all encrypted with our public key.  Here we decrypt that payload.
      * @param clientpayload The encrypted CK+SK payload
@@ -100,7 +129,7 @@ public class Cryptography {
      */
     static byte[] decrypt(byte[] clientpayload) throws UnlockException {
         try {
-            Cipher rsa=Cipher.getInstance("RSA");
+            Cipher rsa=Cipher.getInstance(TRANSFORM);
             rsa.init(Cipher.DECRYPT_MODE,key);
             return rsa.doFinal(clientpayload);
         }
@@ -121,13 +150,13 @@ public class Cryptography {
      * @param sk AES256 Key (Session Key)
      * @param headeredck Plaintext (Client Key with prepended header)
      * @return The AES-CCM encrypted form of headeredck encrypted with the SK, as per protocol specifications.
-     * @throws UnlockException 
+     * @throws UnlockException I/O error
      */
     static byte[] encrypt(byte[] sk, byte[] headeredck) throws UnlockException {
         try {
             if (headeredck.length!=44) { throw new UnlockException("We expected 44 bytes of data to encrypt, 12 byte header + 32 byte CK, but got "+headeredck.length+" bytes to encrypt"); }
             // the response uses 12 bytes of zero nonce
-            byte[] nonce=new byte[12]; for (int nonceinit=0;nonceinit<nonce.length;nonceinit++) { nonce[nonceinit]=0; }
+            byte[] nonce=new byte[12];
             // and no additional authenticate traffic
             byte[] empty=new byte[0];
             // the mode is AES-CCM with 256bit AES, roughly defined in rfc3610, called AES-CCM-CBC or counter with mac, and various other things.

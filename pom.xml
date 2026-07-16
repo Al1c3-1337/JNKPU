@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>net.coagulate</groupId>
+  <artifactId>jnkpu</artifactId>
+  <version>1.2.0</version>
+  <packaging>jar</packaging>
+
+  <name>JNKPU-standalone</name>
+  <description>BitLocker Network Unlock (MS-NKPU) server with a PKCS#11 key backend</description>
+  <url>https://github.com/YOURNAME/jnkpu-standalone</url>
+
+  <licenses>
+    <license>
+      <name>GNU General Public License v3.0 or later</name>
+      <url>https://www.gnu.org/licenses/gpl-3.0.txt</url>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer><name>Iain Price</name><roles><role>Original author</role></roles></developer>
+    <developer><name>YOURNAME</name><roles><role>PKCS#11 backend, tests</role></roles></developer>
+  </developers>
+
+  <properties>
+    <maven.compiler.release>11</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- Only bcprov. Upstream's README says to fetch bcpkix too, but the code uses
+         nothing but the lightweight crypto API, which lives entirely in bcprov. -->
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+      <version>1.84</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Pin it. Maven's built-in default is ancient enough that it ignores
+           maven.compiler.release and falls back to source/target 5. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <!-- Pass a token through to the protocol test:
+               mvn test -Djnkpu.pkcs11.lib=/usr/lib/*/libykcs11.so -Djnkpu.pkcs11.pin=... -->
+          <systemPropertyVariables>
+            <jnkpu.pkcs11.lib>${jnkpu.pkcs11.lib}</jnkpu.pkcs11.lib>
+            <jnkpu.pkcs11.pin>${jnkpu.pkcs11.pin}</jnkpu.pkcs11.pin>
+            <jnkpu.pkcs11.alias>${jnkpu.pkcs11.alias}</jnkpu.pkcs11.alias>
+            <jnkpu.pkcs11.slot>${jnkpu.pkcs11.slot}</jnkpu.pkcs11.slot>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.5.2</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <finalName>jnkpu</finalName>
+              <!-- Otherwise shade drops a dependency-reduced-pom.xml in the repo root
+                   on every build. It is a build artifact, not source. -->
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>net.coagulate.JNKPU.NetworkUnlock</mainClass>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <!-- BouncyCastle ships signed. Keeping the signatures inside a fat
+                       jar makes the JVM reject it: SecurityException, invalid digest. -->
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>defaults</id>
+      <activation><activeByDefault>true</activeByDefault></activation>
+      <properties>
+        <jnkpu.pkcs11.lib/>
+        <jnkpu.pkcs11.pin/>
+        <jnkpu.pkcs11.alias/>
+        <jnkpu.pkcs11.slot>0</jnkpu.pkcs11.slot>
+      </properties>
+    </profile>
+  </profiles>
+</project>

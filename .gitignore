@@ -1,0 +1,22 @@
+*.class
+
+# Never commit these.
+*.key
+*.pem
+*.pfx
+*.p12
+*.cer
+*.crt
+*.pin
+backup/
+*.pcap
+target/
+.idea/
+
+# dpkg-buildpackage droppings (the .deb itself lands in the parent directory)
+debian/jnkpu/
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.substvars
+debian/*.debhelper.log

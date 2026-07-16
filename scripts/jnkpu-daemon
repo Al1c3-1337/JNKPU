@@ -1,0 +1,29 @@
+#!/bin/sh
+# Started by jnkpu.service - not meant to be run by hand (use `jnkpu` for
+# that). Reads /etc/default/jnkpu.
+set -eu
+
+JNKPU_OPTS="--noipv6"
+JNKPU_ASK_PIN="no"
+JNKPU_PIN_PROMPT="PKCS#11 PIN:"
+if [ -r /etc/default/jnkpu ]; then
+    . /etc/default/jnkpu
+fi
+
+if [ "$JNKPU_ASK_PIN" = "yes" ]; then
+    # The start blocks until someone types the PIN. From an SSH session:
+    #     sudo systemd-tty-ask-password-agent --query
+    #
+    # The PIN goes through a pipe straight into the Java process: no
+    # filesystem, no tmpfs, and nothing in /proc/<pid>/cmdline.
+    #
+    # --timeout=0: systemd-ask-password gives up after 90s by default, and
+    # nobody logs in that fast after a boot. The empty answer would then be
+    # refused by the server - which is the only reason an expired timer
+    # would not cost one of the three PIN attempts.
+    systemd-ask-password --timeout=0 --id=jnkpu "$JNKPU_PIN_PROMPT" \
+        | exec /usr/bin/jnkpu $JNKPU_OPTS --pkcs11-pin-stdin
+else
+    # Word splitting of $JNKPU_OPTS is intended.
+    exec /usr/bin/jnkpu $JNKPU_OPTS
+fi

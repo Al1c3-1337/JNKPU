@@ -1,7 +1,22 @@
 /*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
+ * JNKPU - Java Network Key Protector Unlocker (MS-NKPU)
+ *
+ * Copyright (C) 2017 Iain Price
+ * Copyright (C) 2026 {AUTHOR}
+ *
+ * Unmodified from the original JNKPU.
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation, either version 3 of the License, or (at your option) any later
+ * version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 package net.coagulate.JNKPU;
 
@@ -21,6 +36,7 @@ public abstract class Listener extends Thread{
     private static final boolean DEBUG=false; // debug the packet content at various stages
     protected DatagramSocket socket;
 
+    @SuppressWarnings("InfiniteLoopStatement")
     @Override
     public void run() {
         // common behaviour
@@ -29,7 +45,6 @@ public abstract class Listener extends Thread{
                 try {
                     // the packets are far smaller than this
                     byte[] rx = new byte[2048];
-                    byte[] tx = new byte[2048];
                     // block for receive
                     DatagramPacket rxp = new DatagramPacket(rx, rx.length);
                     socket.receive(rxp);
@@ -70,15 +85,15 @@ public abstract class Listener extends Thread{
                     }
                 }
                 // these exceptions are per-packet and cause the unlock to stop, but the thread carries on and waits for the next packet.
-                catch (UnlockException e) { System.out.println("Failed unlock:"+e.toString()); }
+                catch (UnlockException e) { System.out.println("Failed unlock:"+ e); }
             }
         }
         // these exceptions are run() wide and cause the entire thread to exit, whoops :P
         catch (SocketException e)
         {
-            if (!socket.isClosed()) { System.err.println("FATAL: Socket error with "+socket+" - "+e.toString()); }
+            if (!socket.isClosed()) { System.err.println("FATAL: Socket error with "+socket+" - "+ e); }
         } catch (IOException ex) {
-            System.err.println("FATAL: IO Exception with "+socket+" - "+ex.toString());
+            System.err.println("FATAL: IO Exception with "+socket+" - "+ ex);
         }
     }
     
@@ -90,19 +105,20 @@ public abstract class Listener extends Thread{
     private static void dumpBuffer(String str,byte[] array) {
         if (!DEBUG) { return; }
         System.out.println("===== "+str+" ("+array.length+") =====");
-        String concat="";
-        for (int i=0;i<array.length;i++) {
-                String b=Integer.toHexString(array[i]&0xff); 
-                if (b.length()<2) { b="0"+b; }
-                System.out.print(" "+b);
-                concat=concat+b;
+        StringBuilder concat= new StringBuilder();
+        for (byte value : array) {
+            String b = Integer.toHexString(value & 0xff);
+            if (b.length() < 2) {
+                b = "0" + b;
+            }
+            System.out.print(" " + b);
+            concat.append(b);
         }
         System.out.println();
         System.out.println(concat);
     }
     
     /** Extract client payload.
-     * 
      * This method must process the protocol packet and extract (and reassemble if necessary) the RSA encrypted client payload, which contains the Client Key and Session Key
      * @param packet The packet content
      * @return The encrypted content of the packet, or NULL if the packet does not conform to MS-NKPU specifications (we are NOT a dhcp server, many packets are not interesting!)
@@ -168,11 +184,6 @@ public abstract class Listener extends Thread{
         ck[11]=(byte)0x00; 
         System.arraycopy(rawck,0,ck,12,32);
         return ck;
-    }
-    
-    public void close() {
-        if (socket==null) { return; }
-        if (!socket.isClosed()) { socket.close(); }
     }
 
     private void debug(String message) {

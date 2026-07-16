@@ -1,7 +1,22 @@
 /*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
+ * JNKPU - Java Network Key Protector Unlocker (MS-NKPU)
+ *
+ * Copyright (C) 2017 Iain Price
+ * Copyright (C) 2026 {AUTHOR}
+ *
+ * Unmodified from the original JNKPU.
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation, either version 3 of the License, or (at your option) any later
+ * version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 package net.coagulate.JNKPU;
 
@@ -11,7 +26,6 @@ import java.net.MulticastSocket;
 import java.util.logging.Level;
 
 /** Implements the DHCPv6 specific parts of NKPU
- *
  * Note this implementation is weak with bounds checking.
  * The JVM will prevent out of bounds reads, but the raw code assumes this protection.
  * @author Iain Price
@@ -134,7 +148,7 @@ public class DHCPv6 extends Listener {
      * @throws UnlockException If there is a problem with the supplied data
      */
     @Override
-    byte[] constructPayload(byte[] encryptedcontent,byte b[]) throws UnlockException {
+    byte[] constructPayload(byte[] encryptedcontent, byte[] b) throws UnlockException {
         if (encryptedcontent.length!=60) { throw new UnlockException("Reply payload is "+encryptedcontent.length+" bytes long but we expect 60"); }
         
         byte[] clientid=null;
@@ -165,7 +179,7 @@ public class DHCPv6 extends Listener {
         }
         
         r[i++]=0;  r[i++]=0x10; // option code // 19 bytes in this block
-        r[i++]=00; r[i++]=0xf; // option length
+        r[i++]=0; r[i++]=0xf; // option length
         r[i++]=0; r[i++]=0; r[i++]=1; r[i++]=0x37; // microsoft enterprise number
         r[i++]=0; r[i++]=9; // vendor class data length
         r[i++]=0x42;//B
@@ -178,11 +192,11 @@ public class DHCPv6 extends Listener {
         r[i++]=0x45;//E
         r[i++]=0x52;//R        
         
-        r[i++]=00; r[i++]=0x11; // option code // 12 bytes in this block, not incl key
-        r[i++]=00; r[i++]=68;//0x28; // option length
+        r[i++]=0; r[i++]=0x11; // option code // 12 bytes in this block, not incl key
+        r[i++]=0; r[i++]=68;//0x28; // option length
         r[i++]=0; r[i++]=0; r[i++]=1; r[i++]=0x37; // microsoft enterprise number
-        r[i++]=00; r[i++]=0x2; // suboption code
-        r[i++]=00; r[i++]=60;//0x20; // suboption length
+        r[i++]=0; r[i++]=0x2; // suboption code
+        r[i++]=0; r[i++]=60;//0x20; // suboption length
         System.arraycopy(encryptedcontent, 0, r, i, encryptedcontent.length); // decrypted key
         i+=encryptedcontent.length;
         if (INCLUDE_CLIENT_ID && clientid!=null) { System.arraycopy(clientid,0,r,i,clientid.length); } // null guard of IDE happiness
@@ -194,7 +208,7 @@ public class DHCPv6 extends Listener {
         return 546; // such a complex method :) see IANA assignments for "Well Known Ports", this is officially known as BOOTPC, Boot Protocol Client port.
     }
     
-    byte[] extractOptionBlock(byte[] b,int getoption) {
+    byte[] extractOptionBlock(byte[] b, @SuppressWarnings("SameParameterValue") int getoption) {
         int i=4;
         while (i<b.length) {
             int option=(b[i]<<8)+b[i+1]; i+=2;

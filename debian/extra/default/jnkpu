@@ -1,0 +1,23 @@
+# /etc/default/jnkpu - read by jnkpu.service via /usr/libexec/jnkpu/jnkpu-daemon.
+# The service ships disabled; configure a key backend here, then
+#     systemctl enable --now jnkpu
+
+# Options passed to the server. Pick ONE backend:
+#
+#   File backend (PKCS#8 DER - see jnkpu-provision-token, which writes one):
+#     JNKPU_OPTS="--noipv6 /etc/jnkpu/networkunlock.key"
+#
+#   PKCS#11 token backend (YubiKey PIV via ykcs11; needs pcscd + ykcs11):
+#     JNKPU_OPTS="--noipv6 --pkcs11-lib /usr/lib/x86_64-linux-gnu/libykcs11.so"
+#     (on a Raspberry Pi: /usr/lib/aarch64-linux-gnu/libykcs11.so;
+#      opensc-pkcs11.so works too - two independent modules is the point of PIV)
+JNKPU_OPTS="--noipv6"
+
+# "yes" = ask for the token PIN at service start via systemd-ask-password and
+# pipe it to the server; --pkcs11-pin-stdin is appended automatically. The
+# start then blocks until someone answers - from SSH:
+#     sudo systemd-tty-ask-password-agent --query
+JNKPU_ASK_PIN=no
+
+# Prompt text for the PIN question.
+#JNKPU_PIN_PROMPT="YubiKey PIN:"

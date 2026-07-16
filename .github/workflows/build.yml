@@ -1,0 +1,97 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: ['11', '17', '21']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - name: Protocol tests (key file backend)
+        run: mvn -B test
+
+      # The point of this job: prove the PKCS#11 code path on every push without
+      # owning a YubiKey. SoftHSM is a real PKCS#11 module, so the same code runs;
+      # only the hardware differs.
+      - name: Protocol tests (PKCS#11 backend, SoftHSM)
+        if: matrix.java == '21'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y softhsm2 opensc
+          export SOFTHSM2_CONF=$PWD/softhsm.conf
+          mkdir -p $PWD/tokens
+          printf 'directories.tokendir = %s/tokens\nobjectstore.backend = file\n' "$PWD" > $SOFTHSM2_CONF
+          softhsm2-util --init-token --free --label ci --pin 123456 --so-pin 123456
+
+          openssl req -x509 -newkey rsa:2048 -keyout k.pem -out c.pem -days 1 -nodes -subj "/CN=ci"
+          openssl pkcs8 -topk8 -nocrypt -in k.pem -outform DER -out k.der
+          openssl x509 -in c.pem -outform DER -out c.der
+          M=/usr/lib/softhsm/libsofthsm2.so
+          pkcs11-tool --module $M --token-label ci --login --pin 123456 \
+            --write-object k.der --type privkey --label "Key Management" --id 01
+          pkcs11-tool --module $M --token-label ci --login --pin 123456 \
+            --write-object c.der --type cert    --label "Key Management" --id 01
+
+          mvn -B test -Djnkpu.pkcs11.lib=$M -Djnkpu.pkcs11.pin=123456
+
+      - name: Package
+        run: mvn -B package -DskipTests
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.java == '17'
+        with:
+          name: jnkpu-jar
+          path: target/jnkpu.jar
+
+  # Prove the Debian packaging on every push. apt-installed maven/JDK, not
+  # setup-java: dpkg-buildpackage checks Build-Depends against dpkg's
+  # database, so the tools must come from apt.
+  deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build .deb
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential debhelper maven default-jdk-headless
+          dpkg-buildpackage -us -uc -b
+          mv ../jnkpu_*.deb .
+
+      # Informational only - warnings (no manpages, native version) are known.
+      - name: Lintian
+        run: |
+          sudo apt-get install -y --no-install-recommends lintian
+          lintian jnkpu_*.deb || true
+
+      - name: Smoke-install
+        run: |
+          sudo apt-get install -y ./jnkpu_*.deb
+          test -x /usr/bin/jnkpu
+          test -x /usr/bin/jnkpu-provision-token
+          test -x /usr/libexec/jnkpu/jnkpu-daemon
+          test -f /usr/share/jnkpu/jnkpu.jar
+          test -f /etc/default/jnkpu
+          [ "$(stat -c %a /etc/jnkpu)" = "700" ]
+          systemctl cat jnkpu.service >/dev/null
+          # Unit must ship disabled: no key is configured yet.
+          [ "$(systemctl is-enabled jnkpu.service)" = "disabled" ]
+          # The launcher runs (unprivileged -> may not bind 67, but the JVM
+          # and the jar must start and print something).
+          jnkpu 2>&1 | head -5 || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jnkpu-deb
+          path: jnkpu_*.deb

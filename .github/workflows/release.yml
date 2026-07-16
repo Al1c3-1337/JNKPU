@@ -1,0 +1,101 @@
+name: release
+
+# Every push to master that touches something shippable produces a tagged
+# release; workflow_dispatch is for re-running one by hand.
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'src/main/**'
+      - 'pom.xml'
+      - 'debian/**'
+      - 'client/**'
+      - 'scripts/**'
+      - 'systemd/**'
+
+permissions:
+  contents: write
+
+# Two racing runs would compute the same tag; serialize instead.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the version computation needs all tags
+
+      # Base version comes from debian/changelog (which matches pom.xml).
+      # First release of a base gets v<base>; later ones v<base>.1, .2, ...
+      # A dot, not a hyphen: the package is format "3.0 (native)", and native
+      # versions may not contain a Debian revision. Bumping pom + changelog
+      # starts a fresh series.
+      - name: Compute version
+        id: ver
+        run: |
+          BASE=$(dpkg-parsechangelog -S Version)
+          if ! git rev-parse -q --verify "refs/tags/v$BASE" >/dev/null; then
+            VERSION="$BASE"
+          else
+            N=1
+            while git rev-parse -q --verify "refs/tags/v$BASE.$N" >/dev/null; do
+              N=$((N+1))
+            done
+            VERSION="$BASE.$N"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$VERSION (base $BASE)"
+
+      # Stamp the computed version into the changelog so the .deb inside the
+      # release carries the tag's version, not the base. Build-only: the
+      # entry is not committed back.
+      - name: Stamp changelog
+        run: |
+          VERSION='${{ steps.ver.outputs.version }}'
+          BASE=$(dpkg-parsechangelog -S Version)
+          if [ "$VERSION" != "$BASE" ]; then
+            MAINT=$(dpkg-parsechangelog -S Maintainer)
+            { printf 'jnkpu (%s) unstable; urgency=medium\n\n' "$VERSION"
+              printf '  * Automated release build of %s.\n\n' "$GITHUB_SHA"
+              printf ' -- %s  %s\n\n' "$MAINT" "$(date -R)"
+              cat debian/changelog
+            } > debian/changelog.new
+            mv debian/changelog.new debian/changelog
+          fi
+
+      # Runs the protocol tests as part of mvn package - a release build
+      # that fails its own test harness never gets tagged.
+      - name: Build .deb
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential debhelper maven default-jdk-headless
+          dpkg-buildpackage -us -uc -b
+          mv ../jnkpu_*.deb .
+
+      - name: Collect artifacts
+        run: |
+          VERSION='${{ steps.ver.outputs.version }}'
+          # Windows client: certificate template + setup/verify scripts.
+          # .gitattributes keeps the .cmd/.inf files CRLF in the checkout.
+          (cd client && zip -X "../jnkpu-windows-client_${VERSION}.zip" \
+              BitLocker-NetworkUnlock.inf setup.cmd verify.cmd)
+          # The bare fat jar, for Linux distributions without dpkg.
+          cp target/jnkpu.jar "jnkpu_${VERSION}.jar"
+
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION='${{ steps.ver.outputs.version }}'
+          gh release create "v$VERSION" \
+            --target "$GITHUB_SHA" \
+            --title "jnkpu $VERSION" \
+            --generate-notes \
+            jnkpu_*.deb \
+            "jnkpu-windows-client_${VERSION}.zip" \
+            "jnkpu_${VERSION}.jar"

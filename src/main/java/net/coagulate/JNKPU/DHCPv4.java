@@ -1,7 +1,23 @@
 /*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
+ * JNKPU - Java Network Key Protector Unlocker (MS-NKPU)
+ *
+ * Copyright (C) 2017 Iain Price
+ * Copyright (C) 2026 {AUTHOR}
+ *
+ * Modified 2026: added a package-private constructor that skips binding the
+ * privileged port, so the parsing helpers can be tested unprivileged.
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation, either version 3 of the License, or (at your option) any later
+ * version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 package net.coagulate.JNKPU;
 
@@ -20,6 +36,14 @@ public class DHCPv4 extends Listener {
     // Open the listener at initialisation
     public DHCPv4() throws SocketException {
         socket = new DatagramSocket(67);
+    }
+
+    /** Test only, package private. The parsing helpers below are pure functions on
+     *  byte arrays - they never touch the socket. Binding a privileged port just to
+     *  call them means the test needs root, and a test that needs root is a test
+     *  that gets run with sudo and leaves root-owned junk behind. */
+    DHCPv4(boolean bind) throws SocketException {
+        if (bind) { socket = new DatagramSocket(67); }
     }
 
     /** Returns the ADM payload from the DHCPv4 packet.
@@ -127,7 +151,7 @@ public class DHCPv4 extends Listener {
      * @throws UnlockException If there is a problem with the supplied data
      */
     @Override
-    byte[] constructPayload(byte[] encryptedcontent,byte b[]) throws UnlockException {
+    byte[] constructPayload(byte[] encryptedcontent, byte[] b) throws UnlockException {
         if (encryptedcontent.length!=60) { throw new UnlockException("Reply payload is "+encryptedcontent.length+" bytes long but we expect 60"); }
         byte[] r=new byte[256+60]; // happens to be the size
         r[0]=2; // message type: boot reply

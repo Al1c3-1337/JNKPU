@@ -1,0 +1,33 @@
+From: <your name> <your@email>
+Subject: [PATCH] Pin the RSA transform to PKCS#1 v1.5
+
+Cipher.getInstance("RSA") is provider-dependent. The JCE resolves the bare
+alias against whichever provider is first, and BouncyCastle's default for it
+is NoPadding.
+
+JNKPU only uses BouncyCastle's lightweight API and never registers the
+provider, so today SunJCE wins and the default happens to be PKCS1Padding.
+The bug is latent, not active. But any application that embeds JNKPU and
+registers BC as a provider - a one-line change elsewhere - silently turns
+every unlock into garbage. No exception, no error: NoPadding is
+deterministic and returns 256 bytes of noise, which then fails as a bad
+client key rather than as a padding problem.
+
+MS-NKPU is PKCS#1 v1.5. Say so.
+
+No provider is pinned deliberately: the JCE resolves the provider at init()
+from the key, so this one string works for both a file-backed key (SunJCE)
+and a PKCS#11 token handle (SunPKCS11).
+
+--- a/src/net/coagulate/JNKPU/Cryptography.java
++++ b/src/net/coagulate/JNKPU/Cryptography.java
+@@
++    /** MS-NKPU uses PKCS#1 v1.5. Never use the bare "RSA" alias: its meaning
++     *  depends on which provider wins. */
++    private static final String TRANSFORM="RSA/ECB/PKCS1Padding";
++
+     private static PrivateKey key=null;
+@@
+-            Cipher rsa=Cipher.getInstance("RSA");
++            Cipher rsa=Cipher.getInstance(TRANSFORM);
+             rsa.init(Cipher.DECRYPT_MODE,key);

@@ -20,3 +20,4 @@ debian/debhelper-build-stamp
 debian/files
 debian/*.substvars
 debian/*.debhelper.log
+scripts/__pycache__/

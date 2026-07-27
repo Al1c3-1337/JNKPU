@@ -21,3 +21,10 @@ JNKPU_ASK_PIN=no
 
 # Prompt text for the PIN question.
 #JNKPU_PIN_PROMPT="YubiKey PIN:"
+
+# HostEC relay for the nu-armory dongle's SE050 ECKey session. When set, the
+# server ALSO serves the relay on this TCP port using the SAME PIN/login -- the
+# EC auth key (PIV slot 9a) alongside the NKPU key (slot 9d). One PIN, both
+# slots. Requires the PKCS#11 backend + JNKPU_ASK_PIN=yes. The companion BLE
+# bridge (BlueZ, no PIN) runs as jnkpu-sps-bridge.service. Empty = disabled.
+#JNKPU_EC_RELAY_PORT=7213

@@ -10,6 +10,11 @@ if [ -r /etc/default/jnkpu ]; then
     . /etc/default/jnkpu
 fi
 
+# HostEC relay (nu-armory ECKey session) shares this process + PIN when enabled.
+if [ -n "${JNKPU_EC_RELAY_PORT:-}" ]; then
+    JNKPU_OPTS="$JNKPU_OPTS --ec-relay-port $JNKPU_EC_RELAY_PORT"
+fi
+
 if [ "$JNKPU_ASK_PIN" = "yes" ]; then
     # The start blocks until someone types the PIN. From an SSH session:
     #     sudo systemd-tty-ask-password-agent --query

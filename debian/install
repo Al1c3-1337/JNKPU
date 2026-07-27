@@ -3,3 +3,4 @@ scripts/jnkpu                   usr/bin/
 scripts/jnkpu-provision-token   usr/bin/
 scripts/jnkpu-daemon            usr/libexec/jnkpu/
 debian/extra/default/jnkpu      etc/default/
+scripts/sps_bridge.py             usr/share/jnkpu/

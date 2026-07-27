@@ -41,7 +41,14 @@ public class Pkcs11Loader {
         public final PrivateKey key;
         public final Certificate cert;
         public final String alias;
-        Handle(PrivateKey k, Certificate c, String a) { key=k; cert=c; alias=a; }
+        /** The SunPKCS11 provider and the logged-in KeyStore, so a second consumer
+         *  (e.g. the HostEC relay's EC auth key in slot 9a) can reuse the SAME login
+         *  instead of prompting for the PIN again. */
+        public final Provider provider;
+        public final KeyStore keyStore;
+        Handle(PrivateKey k, Certificate c, String a, Provider p, KeyStore ks) {
+            key=k; cert=c; alias=a; provider=p; keyStore=ks;
+        }
     }
 
     public static Handle open(String library, int slotIndex, String pin, String alias)
@@ -60,7 +67,7 @@ public class Pkcs11Loader {
 
         NetworkUnlock.logger.info("Using PKCS#11 key '" + resolved + "' via " + p.getName()
                 + (key.getEncoded() == null ? " (non-extractable)" : " (WARNING: extractable!)"));
-        return new Handle(key, cert, resolved);
+        return new Handle(key, cert, resolved, p, ks);
     }
 
     /** @param alias key alias in the token, or null to auto-detect */

@@ -85,6 +85,15 @@ public class HostECRelay {
         KeyStore ks = KeyStore.getInstance("PKCS11", prov);
         ks.load(null, pin == null ? null : pin.toCharArray());
 
+        startListener(prov, ks, alias, bind, port);
+    }
+
+    /** Serve the HostEC relay on an ALREADY-OPEN PKCS#11 login, so the same PIN /
+     *  KeyStore that unlocks JNKPU's NKPU key (slot 9d) also drives this EC auth
+     *  key (slot 9a): one PIN, both slots. Blocks; NetworkUnlock runs it on its
+     *  own thread. */
+    public static void startListener(Provider prov, KeyStore ks, String alias, String bind, int port)
+            throws Exception {
         String a = resolveAuthAlias(ks, alias);
         PrivateKey key = (PrivateKey) ks.getKey(a, null);
         Certificate cert = ks.getCertificate(a);
@@ -93,17 +102,16 @@ public class HostECRelay {
         }
         ECPublicKey pub = (ECPublicKey) cert.getPublicKey();
         byte[] pubPoint = encodePoint(pub);
-        System.out.println("HostECRelay: key '" + a + "' "
+        ECParameterSpec params = pub.getParams();
+        System.out.println("HostECRelay: EC auth key '" + a + "' "
                 + (key.getEncoded() == null ? "(non-extractable)" : "(WARNING: extractable!)")
-                + ", public point " + pubPoint.length + " bytes");
-
+                + ", point " + pubPoint.length + " bytes; listening on " + bind + ":" + port);
         try (ServerSocket srv = new ServerSocket(port, 1, InetAddress.getByName(bind))) {
-            System.out.println("HostECRelay: listening on " + bind + ":" + port);
             while (true) {
                 try (Socket s = srv.accept()) {
-                    serve(s, prov, key, pub.getParams(), pubPoint);
+                    serve(s, prov, key, params, pubPoint);
                 } catch (Exception e) {
-                    System.err.println("connection error: " + e);
+                    System.err.println("relay connection error: " + e);
                 }
             }
         }

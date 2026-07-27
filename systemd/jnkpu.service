@@ -21,6 +21,7 @@ ExecStart=/bin/sh -c 'systemd-ask-password --timeout=0 --id=jnkpu "YubiKey PIN:"
     -jar /opt/jnkpu/jnkpu.jar \
     --noipv6 \
     --pkcs11-lib /usr/lib/aarch64-linux-gnu/libykcs11.so \
+    --ec-relay-port 7213 \
     --pkcs11-pin-stdin'
 
 # ===========================================================================
@@ -61,3 +62,5 @@ StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
+# Enabling jnkpu also enables the BLE bridge (nu-armory relay path).
+Also=jnkpu-sps-bridge.service

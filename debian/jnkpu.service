@@ -40,3 +40,6 @@ StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
+# Enabling jnkpu also enables the BLE bridge (the nu-armory relay path). The
+# in-process HostEC relay is driven by JNKPU_EC_RELAY_PORT in /etc/default/jnkpu.
+Also=jnkpu-sps-bridge.service

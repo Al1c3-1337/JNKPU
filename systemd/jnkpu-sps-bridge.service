@@ -1,0 +1,25 @@
+[Unit]
+Description=JNKPU SPS bridge - BLE peripheral <-> HostEC relay (nu-armory)
+Documentation=https://github.com/Al1c3-1337/JNKPU
+After=bluetooth.service jnkpu.service
+Wants=bluetooth.service
+# Useless without the relay it forwards to: tie the lifecycle to jnkpu.service.
+BindsTo=jnkpu.service
+
+[Service]
+Type=simple
+# Advertise the name the dongle scans for (config.go: blePeerName). btmgmt +
+# the D-Bus GATT server + LE advertising need root/BlueZ.
+ExecStartPre=/usr/bin/btmgmt --index 0 name nurelay
+ExecStart=/usr/bin/python3 /usr/share/jnkpu/sps_bridge.py \
+    --relay-host 127.0.0.1 --relay-port 7213 --adapter hci0
+
+# The bridge is PIN-less and stateless, so unlike jnkpu.service it may restart.
+Restart=on-failure
+RestartSec=2
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

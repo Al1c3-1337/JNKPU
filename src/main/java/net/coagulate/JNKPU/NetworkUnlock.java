@@ -54,6 +54,13 @@ public class NetworkUnlock {
     private static boolean p11pinstdin=false;  // read PIN from stdin (systemd-ask-password)
     private static String p11alias=null;
 
+    // HostEC relay (YubiKey PIV slot 9a) for the nu-armory dongle's SE050 ECKey
+    // session. Shares the SAME PKCS#11 login as the NKPU key (slot 9d): one PIN,
+    // both slots. 0 = disabled.
+    private static int    ecRelayPort=0;
+    private static String ecRelayBind="127.0.0.1";
+    private static String ecRelayAlias=null;         // 9a auth alias, auto if null
+
     public static void main(String[] args) {
 
         System.out.println("Java Network Key Protector Unlocker version "+VERSION+" ("+RELEASE+")");
@@ -95,7 +102,9 @@ public class NetworkUnlock {
             }
             try {
                 System.out.println("Loading key from PKCS#11 token ("+p11lib+", slot index "+p11slot+")...");
-                Cryptography.setPrivateKey(Pkcs11Loader.load(p11lib,p11slot,pin,p11alias));
+                Pkcs11Loader.Handle h = Pkcs11Loader.open(p11lib,p11slot,pin,p11alias);
+                Cryptography.setPrivateKey(h.key);
+                if (ecRelayPort>0) { startECRelay(h); }
             } catch (Exception e) {
                 System.err.println("FATAL: PKCS#11 init failed - "+e);
                 System.err.println("       NOT retrying: a wrong PIN costs 1 of 3 attempts.");
@@ -104,6 +113,10 @@ public class NetworkUnlock {
         } else {
             if (keyfile==null || keyfile.isEmpty()) {
                 System.err.println("You must specify a key file or --pkcs11-lib"); usage(); System.exit(1);
+            }
+            if (ecRelayPort>0) {
+                System.err.println("WARNING: --ec-relay-port needs a PKCS#11 token (YubiKey slot 9a);"
+                        + " ignored with a file key.");
             }
             System.out.println("Loading private key from file...");
             Cryptography.init(keyfile);
@@ -130,6 +143,21 @@ public class NetworkUnlock {
         System.out.println("Startup is complete, ready to service requests.");
     }
 
+    /** Start the HostEC relay (YubiKey PIV slot 9a) on its own daemon thread,
+     *  reusing the SAME PKCS#11 login as the NKPU key. One PIN, both slots. */
+    private static void startECRelay(Pkcs11Loader.Handle h) {
+        Thread t = new Thread(() -> {
+            try {
+                HostECRelay.startListener(h.provider, h.keyStore, ecRelayAlias, ecRelayBind, ecRelayPort);
+            } catch (Exception e) {
+                System.err.println("HostEC relay failed: "+e);
+            }
+        }, "hostec-relay");
+        t.setDaemon(true);
+        t.start();
+        System.out.println("HostEC relay enabled on "+ecRelayBind+":"+ecRelayPort+" (YubiKey slot 9a)");
+    }
+
     private static void usage() {
         System.out.println("Usage: java net.coagulate.JNKPU.NetworkUnlock [options] [keyfile]");
         System.out.println("  keyfile             PKCS8 *DER* private key, no password. NOT PEM.");
@@ -143,6 +171,11 @@ public class NetworkUnlock {
         System.out.println("                      command line arguments are world-readable via /proc.");
         System.out.println("                      Omit when the key's PIN policy is NEVER.");
         System.out.println("  --pkcs11-alias A    key alias in the token (default: first private key found)");
+        System.out.println("  --ec-relay-port N   also serve the HostEC relay (nu-armory ECKey session) on");
+        System.out.println("                      this TCP port, using the SAME login (YubiKey slot 9a).");
+        System.out.println("                      One PIN drives both the NKPU key (9d) and this. e.g. 7213");
+        System.out.println("  --ec-relay-bind IP  bind address for the relay (default 127.0.0.1)");
+        System.out.println("  --ec-relay-alias A  EC auth key alias (default: auto-detect PIV 9a)");
         System.out.println("  --noipv4 / --noipv6 disable a listener");
         System.out.println("  --strict            exit if any listener fails to start");
     }
@@ -158,6 +191,9 @@ public class NetworkUnlock {
             else if (arg.equalsIgnoreCase("--pkcs11-pin"))   { p11pinfile=next(args,++i); }
             else if (arg.equalsIgnoreCase("--pkcs11-pin-stdin")) { p11pinstdin=true; }
             else if (arg.equalsIgnoreCase("--pkcs11-alias")) { p11alias=next(args,++i); }
+            else if (arg.equalsIgnoreCase("--ec-relay-port"))  { ecRelayPort=Integer.parseInt(next(args,++i)); }
+            else if (arg.equalsIgnoreCase("--ec-relay-bind"))  { ecRelayBind=next(args,++i); }
+            else if (arg.equalsIgnoreCase("--ec-relay-alias")) { ecRelayAlias=next(args,++i); }
             else if (arg.startsWith("--")) { System.err.println("Unknown parameter '"+arg+"'"); usage(); System.exit(1); }
             else { keyfile=arg; }
         }

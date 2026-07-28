@@ -289,6 +289,8 @@ def main():
     ap.add_argument("--relay-host", default=RELAY_HOST)
     ap.add_argument("--relay-port", type=int, default=RELAY_PORT)
     ap.add_argument("--adapter", default=ADAPTER)
+    ap.add_argument("--name", default="nurelay",
+                    help="advertised adapter name the dongle scans for")
     args = ap.parse_args()
 
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
@@ -304,6 +306,13 @@ def main():
         print("        sudo rfkill unblock bluetooth && sudo systemctl restart bluetooth")
         print("        bluetoothctl power on")
         # continue anyway -- the adapter may already be powered
+    try:
+        # Advertised name the dongle scans for (config.go: blePeerName). Set over
+        # D-Bus rather than `btmgmt name`, which hangs when run this early against
+        # a just-started bluetoothd.
+        props.Set(ADAPTER_IF, "Alias", dbus.String(args.name))
+    except dbus.exceptions.DBusException as e:
+        print("bridge: could not set adapter name '%s' via D-Bus (%s)" % (args.name, e))
     bd_addr = str(props.Get(ADAPTER_IF, "Address"))
 
     bridge = Bridge(args.relay_host, args.relay_port)

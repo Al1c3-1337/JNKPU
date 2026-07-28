@@ -8,17 +8,14 @@ PartOf=jnkpu.service
 
 [Service]
 Type=simple
-# Bring the controller up before advertising: unblock the radio (headless Pis
-# often boot with Bluetooth soft-blocked by rfkill), power the controller on,
-# then set the name the dongle scans for (config.go: blePeerName). btmgmt talks
-# to the kernel management socket directly, so this works before bluetoothd is
-# fully ready. The rfkill/power steps are best-effort (-) so a controller that
-# is not rfkill-managed or already on does not fail the unit.
+# Only unblock the radio here (headless Pis often boot Bluetooth soft-blocked).
+# Powering the controller and setting its advertised name are done inside the
+# bridge over D-Bus: running btmgmt from ExecStartPre -- right as
+# bluetooth.service is still bringing the adapter up -- raced bluetoothd and
+# hung, whereas the D-Bus calls wait for the adapter properly.
 ExecStartPre=-/bin/sh -c 'rfkill unblock bluetooth 2>/dev/null || true'
-ExecStartPre=-/usr/bin/btmgmt --index 0 power on
-ExecStartPre=/usr/bin/btmgmt --index 0 name nurelay
 ExecStart=/usr/bin/python3 /usr/share/jnkpu/sps_bridge.py \
-    --relay-host 127.0.0.1 --relay-port 7213 --adapter hci0
+    --relay-host 127.0.0.1 --relay-port 7213 --adapter hci0 --name nurelay
 
 # The bridge is PIN-less and stateless, so unlike jnkpu.service it may restart.
 Restart=on-failure

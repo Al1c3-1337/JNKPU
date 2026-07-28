@@ -18,8 +18,11 @@ override_dh_auto_build:
 override_dh_auto_clean:
 	-mvn -B clean
 
-# Do not enable or start the unit on install: a fresh install has no key and
+# Do not enable or start the units on install: a fresh install has no key and
 # no configured backend, and a service that may prompt for a PIN should be
-# brought up deliberately (systemctl enable --now jnkpu).
+# brought up deliberately (systemctl enable --now jnkpu). Name both units
+# explicitly -- auto-discovery installed only the package-named jnkpu.service
+# and silently dropped jnkpu-sps-bridge.service.
 override_dh_installsystemd:
-	dh_installsystemd --no-enable --no-start
+	dh_installsystemd --no-enable --no-start jnkpu.service
+	dh_installsystemd --no-enable --no-start --name=jnkpu-sps-bridge jnkpu-sps-bridge.service

@@ -340,22 +340,22 @@ def main():
     idx = args.adapter.replace("hci", "")
 
     def btmgmt(*cmd, timeout=6):
-        # These commands return instantly from an idle shell, but here they run
-        # right after we've driven the adapter over D-Bus, and a btmgmt call can
-        # then block contending with bluetoothd. A hard timeout guarantees a stuck
-        # call can never wedge the bridge before it reaches the main loop.
-        # stdin=DEVNULL is a belt-and-braces guard against an interactive prompt.
+        # btmgmt uses the bt_shell (readline) framework and HANGS when run without
+        # a controlling terminal -- as here, from a service/subprocess: the command
+        # executes but bt_shell never returns, so a plain subprocess call blocks
+        # until timeout (works instantly from an interactive shell). Run it under a
+        # PTY via script(1) so it behaves interactively and exits. timeout guards
+        # against any residual stall.
+        line = "btmgmt --index %s %s" % (idx, " ".join(cmd))
         try:
-            r = subprocess.run(["btmgmt", "--index", idx, *cmd],
-                               capture_output=True, text=True,
-                               stdin=subprocess.DEVNULL, timeout=timeout)
+            r = subprocess.run(["script", "-qec", line, "/dev/null"],
+                               capture_output=True, text=True, timeout=timeout)
             if r.returncode != 0:
-                print("bridge: btmgmt %s failed: %s"
-                      % (" ".join(cmd), (r.stderr or r.stdout).strip()))
+                print("bridge: %s failed: %s" % (line, (r.stderr or r.stdout).strip()))
         except subprocess.TimeoutExpired:
-            print("bridge: btmgmt %s timed out (continuing)" % " ".join(cmd))
+            print("bridge: %s timed out" % line)
         except FileNotFoundError:
-            print("bridge: btmgmt not found (install bluez)")
+            print("bridge: script(1) or btmgmt not found (install util-linux / bluez)")
 
     # Set the LOCAL NAME the dongle scans for. The legacy btmgmt advertising path
     # advertises the kernel local name -- NOT the bluetoothd Alias set above -- so

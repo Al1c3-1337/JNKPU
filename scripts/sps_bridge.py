@@ -357,9 +357,15 @@ def main():
         except FileNotFoundError:
             print("bridge: btmgmt not found (install bluez)")
 
+    # Set the LOCAL NAME the dongle scans for. The legacy btmgmt advertising path
+    # advertises the kernel local name -- NOT the bluetoothd Alias set above -- so
+    # THIS btmgmt call is what actually puts the name in the scan response. Must
+    # run before 'advertising on', while the adapter is up (here, not ExecStartPre
+    # where it raced bluetoothd and hung).
+    btmgmt("name", args.name)
     for cmd in (("le", "on"), ("connectable", "on"), ("advertising", "on")):
         btmgmt(*cmd)
-    print("bridge: advertising enabled via btmgmt (legacy path)")
+    print("bridge: advertising '%s' enabled via btmgmt (legacy path)" % args.name)
 
     print("sps_bridge: peripheral up on %s, BD_ADDR=%s" % (args.adapter, bd_addr))
     print("sps_bridge: dongle connect string -> sps://%s/?role=c"

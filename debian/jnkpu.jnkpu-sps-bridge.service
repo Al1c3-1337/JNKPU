@@ -3,8 +3,8 @@ Description=JNKPU SPS bridge - BLE peripheral <-> HostEC relay (nu-armory)
 Documentation=https://github.com/Al1c3-1337/JNKPU
 After=bluetooth.service jnkpu.service
 Wants=bluetooth.service
-# Useless without the relay it forwards to: tie the lifecycle to jnkpu.service.
-BindsTo=jnkpu.service
+# Companion of jnkpu.service: started by its Wants=, stopped/restarted with it.
+PartOf=jnkpu.service
 
 [Service]
 Type=simple
@@ -21,5 +21,6 @@ RestartSec=2
 StandardOutput=journal
 StandardError=journal
 
-[Install]
-WantedBy=multi-user.target
+# No [Install]: this unit is a companion, pulled in by jnkpu.service's Wants=,
+# never enabled on its own. (Enabling/booting jnkpu starts it; masking it lets
+# jnkpu run as a pure NKPU server without the dongle path.)

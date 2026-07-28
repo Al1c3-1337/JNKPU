@@ -4,6 +4,11 @@ Documentation=https://github.com/iprice/JNKPU
 After=network-online.target pcscd.service
 Wants=network-online.target
 Requires=pcscd.service
+# Start the BLE bridge together with the server (nu-armory relay path). Wants=
+# pulls it in at runtime, so a single `systemctl enable --now jnkpu` (and every
+# boot) brings up both. To run a pure NKPU server without the dongle path:
+#     systemctl mask jnkpu-sps-bridge
+Wants=jnkpu-sps-bridge.service
 
 [Service]
 Type=simple
@@ -62,5 +67,3 @@ StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-# Enabling jnkpu also enables the BLE bridge (nu-armory relay path).
-Also=jnkpu-sps-bridge.service

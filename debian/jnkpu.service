@@ -3,6 +3,10 @@ Description=JNKPU - BitLocker Network Unlock server (MS-NKPU)
 Documentation=https://github.com/Al1c3-1337/JNKPU
 After=network-online.target pcscd.service
 Wants=network-online.target pcscd.service
+# Start the BLE bridge together with the server (nu-armory relay path); a single
+# `systemctl enable --now jnkpu` and every boot bring up both. Pure NKPU server
+# without the dongle path:  systemctl mask jnkpu-sps-bridge
+Wants=jnkpu-sps-bridge.service
 
 [Service]
 Type=simple
@@ -40,6 +44,3 @@ StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-# Enabling jnkpu also enables the BLE bridge (the nu-armory relay path). The
-# in-process HostEC relay is driven by JNKPU_EC_RELAY_PORT in /etc/default/jnkpu.
-Also=jnkpu-sps-bridge.service

@@ -329,10 +329,27 @@ def main():
     # kernel-mgmt path via btmgmt instead. The dongle connects by address, so a
     # plain connectable advertisement (no service UUID in the payload) is enough.
     idx = args.adapter.replace("hci", "")
-    for cmd in (["le", "on"], ["connectable", "on"], ["advertising", "on"]):
-        r = subprocess.run(["btmgmt", "--index", idx] + cmd, capture_output=True, text=True)
-        if r.returncode != 0:
-            print("bridge: btmgmt %s failed: %s" % (" ".join(cmd), (r.stderr or r.stdout).strip()))
+
+    def btmgmt(*cmd, timeout=6):
+        # These commands return instantly from an idle shell, but here they run
+        # right after we've driven the adapter over D-Bus, and a btmgmt call can
+        # then block contending with bluetoothd. A hard timeout guarantees a stuck
+        # call can never wedge the bridge before it reaches the main loop.
+        # stdin=DEVNULL is a belt-and-braces guard against an interactive prompt.
+        try:
+            r = subprocess.run(["btmgmt", "--index", idx, *cmd],
+                               capture_output=True, text=True,
+                               stdin=subprocess.DEVNULL, timeout=timeout)
+            if r.returncode != 0:
+                print("bridge: btmgmt %s failed: %s"
+                      % (" ".join(cmd), (r.stderr or r.stdout).strip()))
+        except subprocess.TimeoutExpired:
+            print("bridge: btmgmt %s timed out (continuing)" % " ".join(cmd))
+        except FileNotFoundError:
+            print("bridge: btmgmt not found (install bluez)")
+
+    for cmd in (("le", "on"), ("connectable", "on"), ("advertising", "on")):
+        btmgmt(*cmd)
     print("bridge: advertising enabled via btmgmt (legacy path)")
 
     print("sps_bridge: peripheral up on %s, BD_ADDR=%s" % (args.adapter, bd_addr))

@@ -8,8 +8,14 @@ PartOf=jnkpu.service
 
 [Service]
 Type=simple
-# Advertise the name the dongle scans for (config.go: blePeerName). btmgmt +
-# the D-Bus GATT server + LE advertising need root/BlueZ.
+# Bring the controller up before advertising: unblock the radio (headless Pis
+# often boot with Bluetooth soft-blocked by rfkill), power the controller on,
+# then set the name the dongle scans for (config.go: blePeerName). btmgmt talks
+# to the kernel management socket directly, so this works before bluetoothd is
+# fully ready. The rfkill/power steps are best-effort (-) so a controller that
+# is not rfkill-managed or already on does not fail the unit.
+ExecStartPre=-/bin/sh -c 'rfkill unblock bluetooth 2>/dev/null || true'
+ExecStartPre=-/usr/bin/btmgmt --index 0 power on
 ExecStartPre=/usr/bin/btmgmt --index 0 name nurelay
 ExecStart=/usr/bin/python3 /usr/share/jnkpu/sps_bridge.py \
     --relay-host 127.0.0.1 --relay-port 7213 --adapter hci0

@@ -13,7 +13,8 @@ Package: jnkpu
 Architecture: all
 Depends: ${misc:Depends},
          default-jre-headless (>= 2:1.11) | java11-runtime-headless
-Recommends: openssl, pcscd, ykcs11, yubikey-manager
+Recommends: openssl, pcscd, ykcs11, yubikey-manager,
+            bluez, rfkill, python3, python3-dbus, python3-gi
 Suggests: opensc-pkcs11, softhsm2
 Description: BitLocker Network Unlock (MS-NKPU) server with PKCS#11 key backend
  JNKPU answers BitLocker Network Unlock (MS-NKPU) requests on DHCP port
@@ -27,6 +28,8 @@ Description: BitLocker Network Unlock (MS-NKPU) server with PKCS#11 key backend
  jnkpu-provision-token, which moves a key from a Windows-generated PFX
  onto a YubiKey and writes an offline backup.
  .
- The Recommends cover the token path: pcscd and ykcs11 to talk to a
- YubiKey, yubikey-manager and openssl for provisioning. A server that
+ The Recommends cover the token path (pcscd, ykcs11 to talk to a YubiKey,
+ yubikey-manager and openssl for provisioning) and the nu-armory relay
+ path (bluez, rfkill and python3-dbus/-gi for the BLE bridge that lets the
+ dongle open its SE050 ECKey session against the YubiKey). A server that
  only uses the file backend needs none of them.
